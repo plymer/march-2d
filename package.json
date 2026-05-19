@@ -8,11 +8,13 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev" : "tsx --watch src/index.ts"
+    "build": "tsc",
+    "dev": "tsx --watch src/index.ts"
   },
   "packageManager": "pnpm@10.33.0",
   "devDependencies": {
     "@types/node": "^25.9.0",
+    "oxfmt": "^0.51.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   }

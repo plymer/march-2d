@@ -1,5 +1,3 @@
-console.log("Hello World")
-
 /*
 
 Marching Squares Algorithm Overview
@@ -35,3 +33,38 @@ Apply linear interpolation between the original field data values to find the ex
 
 
 */
+
+import { fillGrid } from "./mockup.js";
+import { applyThreshold, marchGrid } from "./utils.js";
+
+// our lookup table of the 16 binary cases for each corner state
+// use the 0b leader to denote the binary nature of the number
+// 0 is a corner that is below the threshold value
+// 1 is a corner that is above the threshold value
+const lookupTable = [
+  0b0000, 0b0001, 0b0010, 0b0011, 0b0100, 0b0101, 0b0110, 0b0111, 0b1000, 0b1001, 0b1010, 0b1011,
+  0b1100, 0b1101, 0b1110, 0b1111,
+];
+
+// specify our number of grid cells
+const initXDim = 5;
+const initYDim = 5;
+const threshold = 1;
+
+const griddedData = fillGrid(initXDim, initYDim);
+
+griddedData.forEach((r) => console.log(r));
+
+console.log("");
+
+const thresholdedGrid = applyThreshold(griddedData, threshold);
+
+thresholdedGrid.forEach((r) => console.log(r));
+
+// now we have our grid that is ready to be contoured
+// we need to create the contour grid that is n-1 smaller in each dimension by looking up the neighbours in a 2x2 grid (the march starts here)
+
+const marchedGrid = marchGrid(thresholdedGrid);
+
+console.log("");
+marchedGrid.forEach((r) => console.log(r));
