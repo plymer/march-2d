@@ -1,0 +1,19 @@
+{
+  "name": "march-2d",
+  "private": "false",
+  "version": "0.0.1",
+  "description": "A TypeScript 2D Marching Squares implementation",
+  "license": "MIT",
+  "author": "Ryan Pimiskern",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev" : "tsx --watch src/index.ts"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "devDependencies": {
+    "@types/node": "^25.9.0",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
+  }
+}
