@@ -8,6 +8,11 @@ Requirements:
 
 <<< already I can see how this can be a parallelized operation >>>
 
+KEY POINTS:
+
+ - we take the marched values (cell indices) and use that as the 'topology': which edges are crossed
+ - convert the topology in geometry by interpolating a point on EACH EDGE that is crossed using the original field data values (the original scalar values that we thresholded to get the binary grid) to find the exact position of the contour line along the edges of the cell
+
 Step 1)
 
 Apply a threshold to the 2D field to make a binary 'image':
@@ -21,11 +26,11 @@ Every 2x2 block of pixels in the binary image forms a cell used for contouring -
 
 Step 3)
 
-Compose the 4 bits at the corners of the cells to build a binary index by walking the outside of the cell in a clockwise direction and appending the bit to the index using bitwise OR and left-shift from the most significant bit at the top left and the least significant bit at the bttom left - the resulting 4-bit index has a range of possible values of 0-15
+Compose the 4 bits at the corners of the cells to build a binary index by walking the outside of the cell in a clockwise direction and appending the bit to the index using bitwise OR and left-shift from the most significant bit at the top left and the least significant bit at the bttom left - the resulting 4-bit index has a range of possible values of 0-15 --- THIS IS THE CELL INDEX
 
 Step 4)
 
-Look up the cell indices in a pre-built LUT that maps an index to an edge 'case' (shape)
+Look up the cell indices in a pre-built LUT that maps an index to an edge 'case' (shape) --- CALCULATE TOPOLOGY FROM CELL INDICES
 
 Step 5)
 
@@ -44,7 +49,35 @@ import { applyThreshold, marchGrid } from "./utils.js";
 const lookupTable = [
   0b0000, 0b0001, 0b0010, 0b0011, 0b0100, 0b0101, 0b0110, 0b0111, 0b1000, 0b1001, 0b1010, 0b1011,
   0b1100, 0b1101, 0b1110, 0b1111,
-];
+] as const;
+
+type Edge = "top" | "right" | "bottom" | "left";
+type SegmentOnCell = [Edge, Edge];
+
+// Minimal LUT: index -> one contour segment crossing 2 edges
+// (cases 5 and 10 are ambiguous, intentionally omitted for now)
+const caseToSegments: Partial<Record<number, SegmentOnCell[]>> = {
+  0b0001: [["left", "bottom"]],
+  0b0010: [["bottom", "right"]],
+  0b0011: [["left", "right"]],
+  0b0100: [["top", "right"]],
+  0b0110: [["top", "bottom"]],
+  0b0111: [["left", "top"]],
+  0b1000: [["top", "left"]],
+  0b1001: [["top", "bottom"]],
+  0b1011: [["top", "right"]],
+  0b1100: [["left", "right"]],
+  0b1101: [["bottom", "right"]],
+  0b1110: [["left", "bottom"]],
+  // 0b1010: [
+  //   ["top", "right"],
+  //   ["left", "bottom"],
+  // ],
+  // 0b0101: [
+  //   ["top", "left"],
+  //   ["bottom", "right"],
+  // ],
+};
 
 // specify our number of grid cells
 const initXDim = 5;
@@ -67,4 +100,31 @@ thresholdedGrid.forEach((r) => console.log(r));
 const marchedGrid = marchGrid(thresholdedGrid);
 
 console.log("");
-marchedGrid.forEach((r) => console.log(r));
+
+console.log(marchedGrid);
+
+const marchedYDim = marchedGrid.length;
+const marchedXDim = marchedGrid[0]?.length;
+
+if (marchedYDim === undefined || marchedXDim === undefined)
+  throw new Error("marchedGrid is invalid");
+
+// skip 0b0000 and 0b1111 because they contain no line information
+const linesOnGrid: { x: number; y: number; segments: SegmentOnCell[] }[] = [];
+
+for (let y = 0; y < marchedYDim; y++) {
+  for (let x = 0; x < marchedXDim; x++) {
+    const currentPoint = marchedGrid[y]![x];
+
+    if (currentPoint === undefined) continue; // skip invalid points
+
+    if (currentPoint === 0b0000 || currentPoint === 0b1111) continue;
+
+    const segments = caseToSegments[currentPoint];
+    if (!segments) continue; // skip ambiguous / unhandled case for now
+
+    linesOnGrid.push({ x, y, segments });
+  }
+}
+
+console.log("cell-edge segments", JSON.stringify(linesOnGrid, null, 2));
