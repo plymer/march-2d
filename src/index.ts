@@ -66,13 +66,11 @@ const caseToSegments: Partial<Record<number, SegmentOnCell[]>> = {
 };
 
 // specify our number of grid cells
-const initXDim = 5;
-const initYDim = 5;
+const initXDim = 10;
+const initYDim = 10;
 const threshold = 1;
 
 const griddedData = fillGrid(initXDim, initYDim);
-
-griddedData.forEach((r) => console.log(r));
 
 const thresholdedGrid = applyThreshold(griddedData, threshold);
 
