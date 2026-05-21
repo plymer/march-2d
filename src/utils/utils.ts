@@ -48,7 +48,7 @@ export function marchGrid(inputGrid: number[][]) {
     }
   }
 
-  return { marchedGrid: outputGrid, marchedXDim: outputXDim, marchedYDim: outputYDim };
+  return { identityGrid: outputGrid, idXDim: outputXDim, idYDim: outputYDim };
 }
 
 const interpolatePoint = (a: number, b: number, targetValue: number) => {

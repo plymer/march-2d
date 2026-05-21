@@ -1,5 +1,12 @@
-import type { Point, Segment, SegmentOnCell } from "../utils/types.js";
-import { otherEnd, pointKey, pointOnEdge, resolveAmbiguousCase } from "../utils/utils.js";
+import type { FieldTopology, Point, Segment, SegmentOnCell } from "../utils/types.js";
+import {
+  applyThreshold,
+  marchGrid,
+  otherEnd,
+  pointKey,
+  pointOnEdge,
+  resolveAmbiguousCase,
+} from "../utils/utils.js";
 
 const caseToSegments: Partial<Record<number, SegmentOnCell[]>> = {
   0b0001: [["left", "bottom"]],
@@ -23,7 +30,7 @@ export function computeTopology(
   griddedData: number[][],
   threshold: number,
 ) {
-  const linesOnGrid: { x: number; y: number; segments: SegmentOnCell[] }[] = [];
+  const linesOnGrid: FieldTopology[] = [];
 
   for (let y = 0; y < marchedYDim; y++) {
     for (let x = 0; x < marchedXDim; x++) {
@@ -48,17 +55,13 @@ export function computeTopology(
 }
 
 export function interpolateFromTopology(
-  linesOnGrid: {
-    x: number;
-    y: number;
-    segments: SegmentOnCell[];
-  }[],
+  topology: FieldTopology[],
   griddedData: number[][],
   threshold: number,
 ) {
   const interpolatedSegments: Segment[] = [];
 
-  for (const cell of linesOnGrid) {
+  for (const cell of topology) {
     for (const [e0, e1] of cell.segments) {
       const p0 = pointOnEdge(cell.x, cell.y, e0, griddedData, threshold);
       const p1 = pointOnEdge(cell.x, cell.y, e1, griddedData, threshold);
@@ -159,4 +162,34 @@ export function walkSegmentsIntoPolylines(
     walkFromStart(pointKey(a));
   }
   return polylines;
+}
+
+export function marchingSquaresSimple(thresholds: number[], griddedData: number[][]) {
+  return thresholds
+    .map((t) => {
+      const { identityGrid, idXDim, idYDim } = marchGrid(applyThreshold(griddedData, t));
+
+      const topology = computeTopology(identityGrid, idXDim, idYDim, griddedData, t);
+
+      return computeIsolines(topology, t, griddedData);
+    })
+    .flat();
+}
+
+/**
+ * Apply computed topology to a gridded field to find a contour line valid at the threshold value
+ * @param topology
+ * @param threshold
+ * @param griddedData
+ * @returns Line segments interpolated on the griddedData field
+ */
+export function computeIsolines(
+  topology: FieldTopology[],
+  threshold: number,
+  griddedData: number[][],
+) {
+  const interpolatedSegments = interpolateFromTopology(topology, griddedData, threshold);
+
+  const adjacency = computeAdjacency(interpolatedSegments);
+  return walkSegmentsIntoPolylines(adjacency, interpolatedSegments);
 }
