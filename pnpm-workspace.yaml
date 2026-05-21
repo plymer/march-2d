@@ -1,1 +1,3 @@
-mininumReleaseAge: 2880
+allowBuilds:
+  esbuild: true
+minimumReleaseAge: 2880
