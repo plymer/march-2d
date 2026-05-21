@@ -34,6 +34,10 @@ Step 4)
 
 Apply linear interpolation between the original field data values to find the exact position of the contour line along the edges of the cell
 
+Step 5)
+
+Combine line segments from each cell to build the full contour lines
+
 
 */
 
@@ -66,12 +70,13 @@ const caseToSegments: Partial<Record<number, SegmentOnCell[]>> = {
 };
 
 // specify our number of grid cells
-const initXDim = 10;
-const initYDim = 10;
+const initXDim = 20;
+const initYDim = 20;
 const threshold = 1;
 
 const griddedData = fillGrid(initXDim, initYDim);
 
+// THIS IS STEP 1 -- apply a threshold to the 2D field to make a binary 'image'
 const thresholdedGrid = applyThreshold(griddedData, threshold);
 
 // THIS IS STEP 2 -- use a 2x2 moving window of pixels to compose a 4-bit cell index (creates an n-1 dimensioned grid of cells)
@@ -109,4 +114,16 @@ for (const cell of linesOnGrid) {
   }
 }
 
-renderAsciiSegments(interpolatedSegments, initXDim, initYDim, 6);
+/*
+
+we should now 'loop' over all of the interpolatedSegments and start constructing our output by attaching lines that have common vertices
+
+
+*/
+
+const completedLines: [number, number][][] = [];
+
+for (const segment of interpolatedSegments) {
+}
+
+renderAsciiSegments(interpolatedSegments, initXDim, initYDim, 2);

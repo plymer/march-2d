@@ -153,9 +153,9 @@ export const renderAsciiSegments = (
   segments: [[number, number], [number, number]][],
   gridXDim: number,
   gridYDim: number,
-  scale = 6,
+  scale = 2,
 ) => {
-  const canvasWidth = (gridXDim - 1) * scale + 1;
+  const canvasWidth = (gridXDim - 1) * 2 * scale + 1;
   const canvasHeight = (gridYDim - 1) * scale + 1;
 
   const canvas: string[][] = Array.from({ length: canvasHeight }, () =>
@@ -163,7 +163,7 @@ export const renderAsciiSegments = (
   );
 
   const plot = (x: number, y: number, ch: string) => {
-    const cx = Math.round(x * scale);
+    const cx = Math.round(x * 2 * scale);
     const cy = Math.round(y * scale);
     if (cx < 0 || cx >= canvasWidth || cy < 0 || cy >= canvasHeight) return;
     canvas[cy]![cx] = ch;
@@ -172,10 +172,7 @@ export const renderAsciiSegments = (
   const drawSegment = (a: [number, number], b: [number, number]) => {
     const [x0, y0] = a;
     const [x1, y1] = b;
-    const steps = Math.max(
-      1,
-      Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * scale * 2),
-    );
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * scale));
 
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;

@@ -5,7 +5,7 @@ export function fillGrid(xDim: number, yDim: number) {
   for (let y = 0; y < yDim; y++) {
     newGrid.push([]);
     for (let x = 0; x < xDim; x++) {
-      const value = Math.abs(Math.round(Math.sin(y)) + Math.round(Math.cos(x)));
+      const value = Math.round(Math.sin(y)) + Math.round(Math.cos(x));
 
       newGrid[y]?.push(value);
     }
