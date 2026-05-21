@@ -1,5 +1,6 @@
-export type Edge = "top" | "right" | "bottom" | "left";
-export type SegmentOnCell = [Edge, Edge];
+import type { Edge, Point, Segment, SegmentOnCell } from "./types.js";
+
+const thresholdEpsilon = 1e-9;
 
 export function applyThreshold(grid: number[][], threshold: number) {
   const yDim = grid.length;
@@ -14,7 +15,7 @@ export function applyThreshold(grid: number[][], threshold: number) {
     outputGrid.push([]);
     for (let x = 0; x < xDim; x++) {
       if (grid[y]?.[x] === undefined) throw new Error("Gridpoint in grid is undefined");
-      outputGrid[y]?.push(grid[y]![x]! >= threshold ? 1 : 0);
+      outputGrid[y]?.push(grid[y]![x]! > threshold + thresholdEpsilon ? 1 : 0);
     }
   }
 
@@ -53,6 +54,20 @@ export function marchGrid(inputGrid: number[][]) {
 const interpolatePoint = (a: number, b: number, targetValue: number) => {
   if (a === b) return 0.5;
   return (targetValue - a) / (b - a);
+};
+
+const EPS = 1e-6; // epsilon, used to normalize floating point precision for valid comparison of points
+// this normalizes the identity of a point using the x,y coordinates of the point set to the floating point value with an accuracy defined by the epsilon value
+export const pointKey = (p: Point, eps = EPS) => {
+  const qx = Math.round(p[0] / eps) * eps;
+  const qy = Math.round(p[1] / eps) * eps;
+  return `${qx},${qy}`;
+};
+
+// if the key matches one endpoint (x,y) of the segment, it returns the other endpoint of the segment, which is the next point we want to walk to when building our polyline
+export const otherEnd = (seg: Segment, key: string): Point => {
+  const [a, b] = seg;
+  return pointKey(a) === key ? b : a;
 };
 
 /**
@@ -147,47 +162,4 @@ export const resolveAmbiguousCase = (
         ["top", "left"],
         ["bottom", "right"],
       ];
-};
-
-export const renderAsciiSegments = (
-  segments: [[number, number], [number, number]][],
-  gridXDim: number,
-  gridYDim: number,
-  scale = 2,
-) => {
-  const canvasWidth = (gridXDim - 1) * 2 * scale + 1;
-  const canvasHeight = (gridYDim - 1) * scale + 1;
-
-  const canvas: string[][] = Array.from({ length: canvasHeight }, () =>
-    Array.from({ length: canvasWidth }, () => " "),
-  );
-
-  const plot = (x: number, y: number, ch: string) => {
-    const cx = Math.round(x * 2 * scale);
-    const cy = Math.round(y * scale);
-    if (cx < 0 || cx >= canvasWidth || cy < 0 || cy >= canvasHeight) return;
-    canvas[cy]![cx] = ch;
-  };
-
-  const drawSegment = (a: [number, number], b: [number, number]) => {
-    const [x0, y0] = a;
-    const [x1, y1] = b;
-    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * scale));
-
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const x = x0 + (x1 - x0) * t;
-      const y = y0 + (y1 - y0) * t;
-      plot(x, y, ".");
-    }
-
-    plot(x0, y0, "o");
-    plot(x1, y1, "o");
-  };
-
-  for (const [p0, p1] of segments) drawSegment(p0, p1);
-
-  const output = canvas.map((row) => row.join("")).join("\n");
-  console.log("\nASCII isolines:\n");
-  console.log(output);
 };
