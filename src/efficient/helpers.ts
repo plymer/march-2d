@@ -94,6 +94,9 @@ export function buildCaseGrid(grid: number[][], threshold: number) {
   const cellXDim = xDim - 1;
   const cellYDim = yDim - 1;
 
+  // allocate the case grid as a typed array for efficiency; each cell is a 4-bit index into the marching squares LUT
+  // Uint8Array is the smallest available unsigned integer type, so we use that and just ignore the upper 4 bits of each byte
+  // we could use something smaller but we would have to manually manage the process so we use this for convenience
   const caseGrid = new Uint8Array(cellXDim * cellYDim);
 
   for (let y = 0; y < cellYDim; y++) {
@@ -107,7 +110,7 @@ export function buildCaseGrid(grid: number[][], threshold: number) {
       const bottomLeft = isAboveThreshold(rowBottom[x]!, threshold) ? 1 : 0;
 
       const caseIndex = (topLeft << 3) | (topRight << 2) | (bottomRight << 1) | bottomLeft;
-      caseGrid[y * cellXDim + x] = caseIndex;
+      caseGrid[y * cellXDim + x] = caseIndex; // row-major storage; our cell's index is y times the width (stride) of the grid, plus the current column
     }
   }
 
@@ -141,26 +144,6 @@ export function computeTopologyFromCases(
   }
 
   return topology;
-}
-
-function edgeToId(
-  edge: Edge,
-  cellX: number,
-  cellY: number,
-  cellXDim: number,
-  xDim: number,
-  horizontalEdgeCount: number,
-) {
-  switch (edge) {
-    case "top":
-      return cellY * cellXDim + cellX;
-    case "bottom":
-      return (cellY + 1) * cellXDim + cellX;
-    case "left":
-      return horizontalEdgeCount + cellY * xDim + cellX;
-    case "right":
-      return horizontalEdgeCount + cellY * xDim + (cellX + 1);
-  }
 }
 
 function edgeCodeToId(
