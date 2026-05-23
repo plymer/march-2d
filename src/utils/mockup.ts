@@ -13,3 +13,21 @@ export function fillGrid(xDim: number, yDim: number) {
 
   return newGrid;
 }
+
+export function fillGridTypedArray(xDim: number, yDim: number) {
+  // allocate the grid based on our dimensions, we use a typed array for better performance
+  const newGrid = new Float32Array(xDim * yDim);
+
+  // now loop over and assign a value to each cell that we can contour
+  for (let y = 0; y < yDim; y++) {
+    for (let x = 0; x < xDim; x++) {
+      const value = 4 * (Math.round(Math.sin(y)) + Math.round(Math.cos(x)));
+
+      // remember, xDim is the width (stride) of the grid so for every row
+      // we need to skip xDim number of cells
+      newGrid[y * xDim + x] = value;
+    }
+  }
+
+  return newGrid;
+}

@@ -1,11 +1,17 @@
 import { resolveAmbiguousCase } from "../utils/utils.js";
-import type { Edge, Point, SegmentOnCell } from "../utils/types.js";
+import type { Point, SegmentOnCell } from "../utils/types.js";
 
 const thresholdEpsilon = 1e-9;
 
 type EdgeCode = 0 | 1 | 2 | 3; // top, right, bottom, left
 type EdgeCodeSegment = readonly [EdgeCode, EdgeCode];
 type EdgeCodeSegments = readonly EdgeCodeSegment[];
+
+type ScalarField = {
+  xDim: number;
+  yDim: number;
+  get: (x: number, y: number) => number;
+};
 
 // Dense LUT for the 16 marching-square cases.
 const caseToSegmentsDense: ReadonlyArray<SegmentOnCell[] | undefined> = [
@@ -85,6 +91,80 @@ function validateGrid(grid: number[][]) {
 
 const isAboveThreshold = (value: number, threshold: number) => value > threshold + thresholdEpsilon;
 
+function assertGridDims(xDim: number, yDim: number) {
+  if (!Number.isInteger(xDim) || !Number.isInteger(yDim) || xDim < 2 || yDim < 2) {
+    throw new Error("Grid dimensions are invalid; expected xDim >= 2 and yDim >= 2");
+  }
+}
+
+function fieldFromNestedGrid(grid: number[][]): ScalarField {
+  const yDim = grid.length;
+  const xDim = grid[0]?.length ?? 0;
+  assertGridDims(xDim, yDim);
+
+  for (let y = 0; y < yDim; y++) {
+    if (grid[y]?.length !== xDim) throw new Error("Grid rows are not rectangular");
+  }
+
+  return {
+    xDim,
+    yDim,
+    get: (x, y) => grid[y]![x]!,
+  };
+}
+
+function fieldFromRowMajorFloat32(data: Float32Array, xDim: number, yDim: number): ScalarField {
+  assertGridDims(xDim, yDim);
+  if (data.length !== xDim * yDim) {
+    throw new Error("Float32Array length does not match xDim * yDim");
+  }
+
+  return {
+    xDim,
+    yDim,
+    get: (x, y) => data[y * xDim + x]!,
+  };
+}
+
+function segmentsForAmbiguousCell(
+  cellX: number,
+  cellY: number,
+  caseIndex: number,
+  field: ScalarField,
+  threshold: number,
+) {
+  const tl = field.get(cellX, cellY);
+  const tr = field.get(cellX + 1, cellY);
+  const br = field.get(cellX + 1, cellY + 1);
+  const bl = field.get(cellX, cellY + 1);
+  const center = (tl + tr + br + bl) * 0.25;
+  const centerAbove = isAboveThreshold(center, threshold);
+
+  if (caseIndex === 0b0101) return centerAbove ? ambiguousCase5Above : ambiguousCase5Below;
+  return centerAbove ? ambiguousCase10Above : ambiguousCase10Below;
+}
+
+export function buildCaseGridFromField(field: ScalarField, threshold: number) {
+  const { xDim, yDim } = field;
+  const cellXDim = xDim - 1;
+  const cellYDim = yDim - 1;
+  const caseGrid = new Uint8Array(cellXDim * cellYDim);
+
+  for (let y = 0; y < cellYDim; y++) {
+    for (let x = 0; x < cellXDim; x++) {
+      const topLeft = isAboveThreshold(field.get(x, y), threshold) ? 1 : 0;
+      const topRight = isAboveThreshold(field.get(x + 1, y), threshold) ? 1 : 0;
+      const bottomRight = isAboveThreshold(field.get(x + 1, y + 1), threshold) ? 1 : 0;
+      const bottomLeft = isAboveThreshold(field.get(x, y + 1), threshold) ? 1 : 0;
+
+      caseGrid[y * cellXDim + x] =
+        (topLeft << 3) | (topRight << 2) | (bottomRight << 1) | bottomLeft;
+    }
+  }
+
+  return { caseGrid, cellXDim, cellYDim, xDim, yDim };
+}
+
 /**
  * Build a compact case-grid in one pass from scalar data.
  * Output is row-major with dimensions (xDim - 1) * (yDim - 1).
@@ -160,32 +240,11 @@ function edgeCodeToId(
   return horizontalEdgeCount + cellY * xDim + (cellX + 1);
 }
 
-function segmentsForAmbiguousCell(
-  cellX: number,
-  cellY: number,
-  caseIndex: number,
-  scalarGrid: number[][],
-  threshold: number,
-) {
-  const tl = scalarGrid[cellY]![cellX]!;
-  const tr = scalarGrid[cellY]![cellX + 1]!;
-  const br = scalarGrid[cellY + 1]![cellX + 1]!;
-  const bl = scalarGrid[cellY + 1]![cellX]!;
-  const center = (tl + tr + br + bl) * 0.25;
-  const centerAbove = isAboveThreshold(center, threshold);
-
-  if (caseIndex === 0b0101) {
-    return centerAbove ? ambiguousCase5Above : ambiguousCase5Below;
-  }
-
-  return centerAbove ? ambiguousCase10Above : ambiguousCase10Below;
-}
-
 export function buildEdgeSegmentsFromCases(
   caseGrid: Uint8Array,
   cellXDim: number,
   cellYDim: number,
-  scalarGrid: number[][],
+  field: ScalarField,
   threshold: number,
 ) {
   const xDim = cellXDim + 1;
@@ -196,17 +255,13 @@ export function buildEdgeSegmentsFromCases(
   const endpointCount = horizontalEdgeCount + verticalEdgeCount;
 
   let segmentCount = 0;
-
   for (let y = 0; y < cellYDim; y++) {
     for (let x = 0; x < cellXDim; x++) {
       const caseIndex = caseGrid[y * cellXDim + x]!;
-
       if (caseIndex === 0 || caseIndex === 15) continue;
-
       const segments =
         caseToEdgeCodesDense[caseIndex] ??
-        segmentsForAmbiguousCell(x, y, caseIndex, scalarGrid, threshold);
-
+        segmentsForAmbiguousCell(x, y, caseIndex, field, threshold);
       segmentCount += segments.length;
     }
   }
@@ -218,19 +273,16 @@ export function buildEdgeSegmentsFromCases(
   for (let y = 0; y < cellYDim; y++) {
     for (let x = 0; x < cellXDim; x++) {
       const caseIndex = caseGrid[y * cellXDim + x]!;
-
       if (caseIndex === 0 || caseIndex === 15) continue;
 
       const segments =
         caseToEdgeCodesDense[caseIndex] ??
-        segmentsForAmbiguousCell(x, y, caseIndex, scalarGrid, threshold);
+        segmentsForAmbiguousCell(x, y, caseIndex, field, threshold);
 
       for (const [e0, e1] of segments) {
         const idA = edgeCodeToId(e0, x, y, cellXDim, xDim, horizontalEdgeCount);
         const idB = edgeCodeToId(e1, x, y, cellXDim, xDim, horizontalEdgeCount);
-
         if (idA === idB) continue;
-
         edgeA[writeIdx] = idA;
         edgeB[writeIdx] = idB;
         writeIdx++;
@@ -238,21 +290,16 @@ export function buildEdgeSegmentsFromCases(
     }
   }
 
-  if (writeIdx !== segmentCount) {
-    // Degenerate segments were skipped; trim arrays to actual size.
-    return {
-      edgeA: edgeA.slice(0, writeIdx),
-      edgeB: edgeB.slice(0, writeIdx),
-      segmentCount: writeIdx,
-      endpointCount,
-      horizontalEdgeCount,
-      xDim,
-      yDim,
-      cellXDim,
-    };
-  }
-
-  return { edgeA, edgeB, segmentCount, endpointCount, horizontalEdgeCount, xDim, yDim, cellXDim };
+  return writeIdx === segmentCount
+    ? { edgeA, edgeB, endpointCount, horizontalEdgeCount, xDim, cellXDim }
+    : {
+        edgeA: edgeA.slice(0, writeIdx),
+        edgeB: edgeB.slice(0, writeIdx),
+        endpointCount,
+        horizontalEdgeCount,
+        xDim,
+        cellXDim,
+      };
 }
 
 function interpolateT(a: number, b: number, threshold: number) {
@@ -265,25 +312,23 @@ function edgeIdToPoint(
   horizontalEdgeCount: number,
   cellXDim: number,
   xDim: number,
-  scalarGrid: number[][],
+  field: ScalarField,
   threshold: number,
 ) {
   if (edgeId < horizontalEdgeCount) {
     const y = Math.floor(edgeId / cellXDim);
     const x = edgeId - y * cellXDim;
-    const a = scalarGrid[y]![x]!;
-    const b = scalarGrid[y]![x + 1]!;
-    const t = interpolateT(a, b, threshold);
-    return [x + t, y] as Point;
+    const a = field.get(x, y);
+    const b = field.get(x + 1, y);
+    return [x + interpolateT(a, b, threshold), y] as Point;
   }
 
   const localId = edgeId - horizontalEdgeCount;
   const y = Math.floor(localId / xDim);
   const x = localId - y * xDim;
-  const a = scalarGrid[y]![x]!;
-  const b = scalarGrid[y + 1]![x]!;
-  const t = interpolateT(a, b, threshold);
-  return [x, y + t] as Point;
+  const a = field.get(x, y);
+  const b = field.get(x, y + 1);
+  return [x, y + interpolateT(a, b, threshold)] as Point;
 }
 
 export function walkEdgeSegmentsIntoPolylines(
@@ -293,23 +338,19 @@ export function walkEdgeSegmentsIntoPolylines(
   horizontalEdgeCount: number,
   cellXDim: number,
   xDim: number,
-  scalarGrid: number[][],
+  field: ScalarField,
   threshold: number,
 ) {
   const segmentCount = edgeA.length;
   const degree = new Uint16Array(endpointCount);
 
   for (let i = 0; i < segmentCount; i++) {
-    const a = edgeA[i]!;
-    const b = edgeB[i]!;
-    degree[a] = degree[a]! + 1;
-    degree[b] = degree[b]! + 1;
+    degree[edgeA[i]!]! += 1;
+    degree[edgeB[i]!]! += 1;
   }
 
   const offsets = new Uint32Array(endpointCount + 1);
-  for (let i = 0; i < endpointCount; i++) {
-    offsets[i + 1] = offsets[i]! + degree[i]!;
-  }
+  for (let i = 0; i < endpointCount; i++) offsets[i + 1] = offsets[i]! + degree[i]!;
 
   const incident = new Uint32Array(offsets[endpointCount]!);
   const cursor = new Uint32Array(offsets);
@@ -327,38 +368,27 @@ export function walkEdgeSegmentsIntoPolylines(
   const pointY = new Float64Array(endpointCount);
   const pointReady = new Uint8Array(endpointCount);
 
-  const getPoint = (edgeId: number) => {
-    if (pointReady[edgeId] === 1) {
-      return [pointX[edgeId]!, pointY[edgeId]!] as Point;
-    }
-
-    const [x, y] = edgeIdToPoint(
-      edgeId,
-      horizontalEdgeCount,
-      cellXDim,
-      xDim,
-      scalarGrid,
-      threshold,
-    );
+  const getPoint = (edgeId: number): Point => {
+    if (pointReady[edgeId] === 1) return [pointX[edgeId]!, pointY[edgeId]!];
+    const [x, y] = edgeIdToPoint(edgeId, horizontalEdgeCount, cellXDim, xDim, field, threshold);
     pointX[edgeId] = x;
     pointY[edgeId] = y;
     pointReady[edgeId] = 1;
-    return [x, y] as Point;
+    return [x, y];
   };
 
   const visited = new Uint8Array(segmentCount);
   const polylines: Point[][] = [];
 
   const walkFrom = (startEdgeId: number) => {
-    const line: Point[] = [];
+    const line: Point[] = [getPoint(startEdgeId)];
     let currentEdgeId = startEdgeId;
-    line.push(getPoint(currentEdgeId));
 
     while (true) {
       const begin = offsets[currentEdgeId]!;
       const end = offsets[currentEdgeId + 1]!;
-
       let nextSegment = -1;
+
       for (let i = begin; i < end; i++) {
         const segIdx = incident[i]!;
         if (visited[segIdx] === 0) {
@@ -368,8 +398,8 @@ export function walkEdgeSegmentsIntoPolylines(
       }
 
       if (nextSegment === -1) break;
-
       visited[nextSegment] = 1;
+
       const a = edgeA[nextSegment]!;
       const b = edgeB[nextSegment]!;
       currentEdgeId = a === currentEdgeId ? b : a;
@@ -380,34 +410,26 @@ export function walkEdgeSegmentsIntoPolylines(
   };
 
   for (let edgeId = 0; edgeId < endpointCount; edgeId++) {
-    if (degree[edgeId] === 1) {
-      walkFrom(edgeId);
-    }
+    if (degree[edgeId] === 1) walkFrom(edgeId);
   }
 
   for (let segIdx = 0; segIdx < segmentCount; segIdx++) {
-    if (visited[segIdx] === 1) continue;
-    walkFrom(edgeA[segIdx]!);
+    if (visited[segIdx] === 0) walkFrom(edgeA[segIdx]!);
   }
 
   return polylines;
 }
 
-/**
- * First efficient pass: typed-array case generation + dense LUT topology, then reuse
- * existing segment interpolation and polyline walking while we validate correctness.
- */
-export function marchingSquaresEfficient(thresholds: number[], scalarGrid: number[][]) {
+function marchWithField(thresholds: number[], field: ScalarField) {
   const allPolylines: Point[][] = [];
 
   for (const threshold of thresholds) {
-    const { caseGrid, cellXDim, cellYDim } = buildCaseGrid(scalarGrid, threshold);
-
+    const { caseGrid, cellXDim, cellYDim } = buildCaseGridFromField(field, threshold);
     const { edgeA, edgeB, endpointCount, horizontalEdgeCount, xDim } = buildEdgeSegmentsFromCases(
       caseGrid,
       cellXDim,
       cellYDim,
-      scalarGrid,
+      field,
       threshold,
     );
 
@@ -418,7 +440,7 @@ export function marchingSquaresEfficient(thresholds: number[], scalarGrid: numbe
       horizontalEdgeCount,
       cellXDim,
       xDim,
-      scalarGrid,
+      field,
       threshold,
     );
 
@@ -426,4 +448,27 @@ export function marchingSquaresEfficient(thresholds: number[], scalarGrid: numbe
   }
 
   return allPolylines;
+}
+
+// Backward-compatible nested-grid API
+export function marchingSquaresEfficient(thresholds: number[], scalarGrid: number[][]) {
+  return marchWithField(thresholds, fieldFromNestedGrid(scalarGrid));
+}
+
+export function marchingSquares(
+  thresholds: number[],
+  typedArray: Float32Array,
+  shape: [number, number],
+) {
+  const [xDim, yDim] = shape;
+
+  if (typedArray.length !== xDim * yDim) {
+    throw new Error("Typed array length does not match provided shape");
+  }
+
+  if (shape.length !== 2) {
+    throw new Error("Only 2D shapes are supported");
+  }
+
+  return marchWithField(thresholds, fieldFromRowMajorFloat32(typedArray, xDim, yDim));
 }

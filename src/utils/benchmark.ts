@@ -70,16 +70,16 @@ function benchmark(name: string, fn: MarchFn, grid: number[][], levels: number[]
   console.log(
     `${name} timing ms: min=${Math.min(...durations).toFixed(3)} median=${median(durations).toFixed(3)} p95=${percentile(durations, 95).toFixed(3)} avg=${avgMs.toFixed(3)}`,
   );
-  console.log(
-    `${name} memory MiB: heapUsed_before=${bytesToMiB(memBefore.heapUsed).toFixed(2)} heapUsed_after=${bytesToMiB(memAfter.heapUsed).toFixed(2)} rss_before=${bytesToMiB(memBefore.rss).toFixed(2)} rss_after=${bytesToMiB(memAfter.rss).toFixed(2)}`,
-  );
+  // console.log(
+  //   `${name} memory MiB: heapUsed_before=${bytesToMiB(memBefore.heapUsed).toFixed(2)} heapUsed_after=${bytesToMiB(memAfter.heapUsed).toFixed(2)} rss_before=${bytesToMiB(memBefore.rss).toFixed(2)} rss_after=${bytesToMiB(memAfter.rss).toFixed(2)}`,
+  // );
 }
 
 console.log("Benchmark configuration");
 console.log(
   `sizes=${sizes.join(",")}, thresholds=${thresholds.join(",")}, warmups=${warmups}, repeats=${repeats}`,
 );
-console.log("Use NODE_OPTIONS=--expose-gc to enable explicit GC between benchmark phases.");
+// console.log("Use NODE_OPTIONS=--expose-gc to enable explicit GC between benchmark phases.");
 console.log("");
 
 for (const size of sizes) {

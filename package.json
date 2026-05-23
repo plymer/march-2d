@@ -11,7 +11,7 @@
     "build": "tsc",
     "dev:simple": "tsx --watch src/simple/index.ts",
     "dev:efficient": "tsx --watch src/efficient/index.ts",
-    "dev:benchmark": "tsx --watch src/utils/benchmark.ts"
+    "bench": "tsx --watch src/utils/benchmark.ts"
   },
   "devDependencies": {
     "@types/node": "^25.9.0",
