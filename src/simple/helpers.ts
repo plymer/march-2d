@@ -23,6 +23,8 @@ const caseToSegments: Partial<Record<number, SegmentOnCell[]>> = {
   0b1110: [["left", "bottom"]],
 };
 
+const bandEpsilon = 1e-9;
+
 export function computeTopology(
   marchedGrid: number[][],
   marchedXDim: number,

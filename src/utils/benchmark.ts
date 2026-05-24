@@ -1,7 +1,8 @@
 import { marchingSquaresSimple } from "../simple/helpers.js";
-import { marchingSquares, type PolylinesWithLevels } from "../efficient/helpers.js";
+import { marchingSquares } from "../efficient/helpers.js";
 import { fillGrid } from "./mockup.js";
 import { contours, type ContourMultiPolygon } from "d3-contour";
+import type { PolylinesWithLevels } from "./types.js";
 
 type D3ContoursWithSmooth = ReturnType<typeof contours> & {
   smooth: (enabled: boolean) => ReturnType<typeof contours>;
@@ -112,6 +113,18 @@ function normalizeLineForCounting(line: PointLine) {
   }
 
   return cleaned;
+}
+
+function summarizePolylinesPacked(polylines: PolylinesWithLevels): BenchSummary {
+  let pointCount = polylines.polylines.reduce((sum, line) => sum + line.length, 0);
+  let polylineCount = polylines.polylines.length;
+
+  return {
+    polylineCount,
+    pointCount,
+    invalidPointCount: 0,
+    emptyPolylineCount: 0,
+  };
 }
 
 function summarizePolylines(polylines: PointLine[]): BenchSummary {
@@ -314,7 +327,7 @@ const contenders: Contender[] = [
     setup: (grid, levels) => {
       return {
         runCore: () => marchingSquares(levels, grid),
-        summarize: (output) => summarizePolylines((output as PolylinesWithLevels).polylines),
+        summarize: (output) => summarizePolylinesPacked(output as PolylinesWithLevels),
       };
     },
   },
@@ -328,7 +341,7 @@ const contenders: Contender[] = [
     },
   },
   {
-    name: "d3-contour",
+    name: "d3 1x",
     setup: (grid, levels) => {
       const { values, xDim, yDim } = flattenGridForD3(grid);
       const shiftedLevels = levels.map((level) => level + contourThresholdEpsilon);
@@ -337,6 +350,23 @@ const contenders: Contender[] = [
 
       return {
         runCore: () => generateContours(values),
+        summarize: (output) => summarizeD3Isolines(output as ContourMultiPolygon[]),
+      };
+    },
+  },
+  {
+    name: "d3 2x",
+    setup: (grid, levels) => {
+      const { values, xDim, yDim } = flattenGridForD3(grid);
+      const shiftedLevels = levels.map((level) => level + contourThresholdEpsilon);
+      const generator = contours().size([xDim, yDim]).thresholds(shiftedLevels);
+      const generateContours = (generator as D3ContoursWithSmooth).smooth(false);
+
+      return {
+        runCore: () => {
+          generateContours(values);
+          return generateContours(values);
+        }, // run twice to simulate the fast-barnes-ts behaviour where it has to calculate a second set of contours to remove data void edges
         summarize: (output) => summarizeD3Isolines(output as ContourMultiPolygon[]),
       };
     },
