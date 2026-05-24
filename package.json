@@ -11,6 +11,7 @@
     "build": "tsc",
     "dev:simple": "tsx --watch src/simple/index.ts",
     "dev:efficient": "tsx --watch src/efficient/index.ts",
+    "dev:barnes": "tsx --watch src/barnes/index.ts",
     "bench": "tsx --watch src/utils/benchmark.ts"
   },
   "dependencies": {

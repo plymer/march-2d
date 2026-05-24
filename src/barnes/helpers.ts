@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 
 export async function readInputFromCsv(): Promise<Tuple2DWithValue[]> {
-  const csv = await fs.readFile(path.resolve(".", "input.csv"), "utf-8");
+  const csv = await fs.readFile(path.resolve(".", "src", "barnes", "input.csv"), "utf-8");
 
   const lines = csv.trim().split("\n");
   const pointData = lines.map((line) => {

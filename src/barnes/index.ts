@@ -19,11 +19,19 @@ async function main() {
     method: "optimized_convolution",
   });
 
-  const polylines = marchingSquares([-6, 0, 6], data, shape as [number, number]);
+  // const thresholds = Array.from({ length: 25 }).map((_, i) => 960 + i * 4);
+
+  const thresholds = Array.from({ length: 21 }).map((_, i) => -50 + i * 5);
+
+  const polylines = marchingSquares(thresholds, data, shape as [number, number]);
 
   console.log(
     `Computed ${polylines.polylines.length} polylines for the following thresholds: ${polylines.levelValues.join(", ")}`,
   );
+
+  if (polylines.polylines.length > 0) {
+    console.log(`Example polyline (first threshold):`, polylines.polylines[0]);
+  }
 }
 
 await main();
