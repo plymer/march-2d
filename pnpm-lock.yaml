@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@plymer/fast-barnes-ts':
+        specifier: ^0.3.3
+        version: 0.3.3(@types/geojson@7946.0.16)
     devDependencies:
       '@types/node':
         specifier: ^25.9.0
@@ -301,8 +305,25 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@plymer/fast-barnes-ts@0.3.3':
+    resolution: {integrity: sha512-Rbq9UYmI5AJDQbGsYGSuW4nNxuBBqbQTn9bOF8Rh6PMp2PNeCXy2f7e8WnZ2kinzyzMsQuUruIertLG6jz1g3g==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/geojson': '>=7946.0.16'
+
+  '@types/geojson@7946.0.16':
+    resolution: {integrity: sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==}
+
   '@types/node@25.9.0':
     resolution: {integrity: sha512-AOQwYUNolgy3VosiRqXrACUXTN8nJUtPl7FJXMqZVyxiiCLhQuG3jXKvCS1ALr+Y2OmZhzzLVlYPEqJaiqkaJQ==}
+
+  d3-array@3.2.4:
+    resolution: {integrity: sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==}
+    engines: {node: '>=12'}
+
+  d3-contour@4.0.2:
+    resolution: {integrity: sha512-4EzFTRIikzs47RGmdxbeUvLWtGedDUNkTcmzoeyg4sP/dvCexO47AaQL7VKy/gul85TOxw+IBgA8US2xwbToNA==}
+    engines: {node: '>=12'}
 
   esbuild@0.28.0:
     resolution: {integrity: sha512-sNR9MHpXSUV/XB4zmsFKN+QgVG82Cc7+/aaxJ8Adi8hyOac+EXptIp45QBPaVyX3N70664wRbTcLTOemCAnyqw==}
@@ -313,6 +334,10 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  internmap@2.0.3:
+    resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
+    engines: {node: '>=12'}
 
   oxfmt@0.51.0:
     resolution: {integrity: sha512-l/AoAnaEOV7Q5/Z9kHOMDehVJnCgYN7wRoooWCTUMBMi16BJhLZqd9cmCnwcVFfVlzkt53zK2KLPFNp8vSsoDg==}
@@ -478,9 +503,24 @@ snapshots:
   '@oxfmt/binding-win32-x64-msvc@0.51.0':
     optional: true
 
+  '@plymer/fast-barnes-ts@0.3.3(@types/geojson@7946.0.16)':
+    dependencies:
+      '@types/geojson': 7946.0.16
+      d3-contour: 4.0.2
+
+  '@types/geojson@7946.0.16': {}
+
   '@types/node@25.9.0':
     dependencies:
       undici-types: 7.24.6
+
+  d3-array@3.2.4:
+    dependencies:
+      internmap: 2.0.3
+
+  d3-contour@4.0.2:
+    dependencies:
+      d3-array: 3.2.4
 
   esbuild@0.28.0:
     optionalDependencies:
@@ -513,6 +553,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  internmap@2.0.3: {}
 
   oxfmt@0.51.0:
     dependencies:

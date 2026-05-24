@@ -13,6 +13,9 @@
     "dev:efficient": "tsx --watch src/efficient/index.ts",
     "bench": "tsx --watch src/utils/benchmark.ts"
   },
+  "dependencies": {
+    "@plymer/fast-barnes-ts": "^0.3.3"
+  },
   "devDependencies": {
     "@types/node": "^25.9.0",
     "oxfmt": "^0.51.0",
