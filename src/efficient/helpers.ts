@@ -91,6 +91,11 @@ function validateGrid(grid: number[][]) {
 
 const isAboveThreshold = (value: number, threshold: number) => value > threshold + thresholdEpsilon;
 
+function interpolateT(a: number, b: number, threshold: number) {
+  if (a === b) return 0.5;
+  return (threshold - a) / (b - a);
+}
+
 function assertGridDims(xDim: number, yDim: number) {
   if (!Number.isInteger(xDim) || !Number.isInteger(yDim) || xDim < 2 || yDim < 2) {
     throw new Error("Grid dimensions are invalid; expected xDim >= 2 and yDim >= 2");
@@ -113,7 +118,7 @@ function fieldFromNestedGrid(grid: number[][]): ScalarField {
   };
 }
 
-function fieldFromRowMajorFloat32(data: Float32Array, xDim: number, yDim: number): ScalarField {
+function fieldFromTypedArray(data: Float32Array, xDim: number, yDim: number): ScalarField {
   assertGridDims(xDim, yDim);
   if (data.length !== xDim * yDim) {
     throw new Error("Float32Array length does not match xDim * yDim");
@@ -126,10 +131,10 @@ function fieldFromRowMajorFloat32(data: Float32Array, xDim: number, yDim: number
   };
 }
 
-function segmentsForAmbiguousCell(
+function resolveSaddle(
   cellX: number,
   cellY: number,
-  caseIndex: number,
+  caseIndex: 5 | 10,
   field: ScalarField,
   threshold: number,
 ) {
@@ -137,14 +142,75 @@ function segmentsForAmbiguousCell(
   const tr = field.get(cellX + 1, cellY);
   const br = field.get(cellX + 1, cellY + 1);
   const bl = field.get(cellX, cellY + 1);
-  const center = (tl + tr + br + bl) * 0.25;
-  const centerAbove = isAboveThreshold(center, threshold);
 
-  if (caseIndex === 0b0101) return centerAbove ? ambiguousCase5Above : ambiguousCase5Below;
-  return centerAbove ? ambiguousCase10Above : ambiguousCase10Below;
+  const centerAbove = isAboveThreshold((tl + tr + br + bl) * 0.25, threshold);
+
+  switch (caseIndex) {
+    case 5:
+      return centerAbove ? ambiguousCase5Above : ambiguousCase5Below;
+    case 10:
+      return centerAbove ? ambiguousCase10Above : ambiguousCase10Below;
+  }
 }
 
-export function buildCaseGridFromField(field: ScalarField, threshold: number) {
+function edgeCodeToId(
+  edgeCode: EdgeCode,
+  cellX: number,
+  cellY: number,
+  cellXDim: number,
+  xDim: number,
+  horizontalEdgeCount: number,
+) {
+  switch (edgeCode) {
+    case 0:
+      return cellY * cellXDim + cellX;
+    case 2:
+      return (cellY + 1) * cellXDim + cellX;
+    case 3:
+      return horizontalEdgeCount + cellY * xDim + cellX;
+    default:
+      return horizontalEdgeCount + cellY * xDim + (cellX + 1);
+  }
+}
+
+function edgeIdToPoint(
+  edgeId: number,
+  horizontalEdgeCount: number,
+  cellXDim: number,
+  xDim: number,
+  field: ScalarField,
+  threshold: number,
+) {
+  if (edgeId < horizontalEdgeCount) {
+    const y = Math.floor(edgeId / cellXDim);
+    const x = edgeId - y * cellXDim;
+    const a = field.get(x, y);
+    const b = field.get(x + 1, y);
+    return [x + interpolateT(a, b, threshold), y] as Point;
+  }
+
+  const localId = edgeId - horizontalEdgeCount;
+  const y = Math.floor(localId / xDim);
+  const x = localId - y * xDim;
+  const a = field.get(x, y);
+  const b = field.get(x, y + 1);
+  return [x, y + interpolateT(a, b, threshold)] as Point;
+}
+
+function computeSegments(
+  caseIndex: number,
+  x: number,
+  y: number,
+  field: ScalarField,
+  threshold: number,
+) {
+  const isAmbiguous = caseIndex === 5 || caseIndex === 10;
+  return isAmbiguous
+    ? resolveSaddle(x, y, caseIndex as 5 | 10, field, threshold)
+    : caseToEdgeCodesDense[caseIndex]!;
+}
+
+export function computeCaseIdentities(field: ScalarField, threshold: number) {
   const { xDim, yDim } = field;
   const cellXDim = xDim - 1;
   const cellYDim = yDim - 1;
@@ -226,21 +292,7 @@ export function computeTopologyFromCases(
   return topology;
 }
 
-function edgeCodeToId(
-  edgeCode: EdgeCode,
-  cellX: number,
-  cellY: number,
-  cellXDim: number,
-  xDim: number,
-  horizontalEdgeCount: number,
-) {
-  if (edgeCode === 0) return cellY * cellXDim + cellX;
-  if (edgeCode === 2) return (cellY + 1) * cellXDim + cellX;
-  if (edgeCode === 3) return horizontalEdgeCount + cellY * xDim + cellX;
-  return horizontalEdgeCount + cellY * xDim + (cellX + 1);
-}
-
-export function buildEdgeSegmentsFromCases(
+export function computeTopology(
   caseGrid: Uint8Array,
   cellXDim: number,
   cellYDim: number,
@@ -254,18 +306,17 @@ export function buildEdgeSegmentsFromCases(
   const verticalEdgeCount = xDim * cellYDim;
   const endpointCount = horizontalEdgeCount + verticalEdgeCount;
 
+  // we loop over once first to figure out how large our edge allocations need to be
   let segmentCount = 0;
   for (let y = 0; y < cellYDim; y++) {
     for (let x = 0; x < cellXDim; x++) {
       const caseIndex = caseGrid[y * cellXDim + x]!;
       if (caseIndex === 0 || caseIndex === 15) continue;
-      const segments =
-        caseToEdgeCodesDense[caseIndex] ??
-        segmentsForAmbiguousCell(x, y, caseIndex, field, threshold);
-      segmentCount += segments.length;
+      segmentCount += computeSegments(caseIndex, x, y, field, threshold).length;
     }
   }
 
+  // allocate our memory for edges
   const edgeA = new Uint32Array(segmentCount);
   const edgeB = new Uint32Array(segmentCount);
   let writeIdx = 0;
@@ -275,9 +326,7 @@ export function buildEdgeSegmentsFromCases(
       const caseIndex = caseGrid[y * cellXDim + x]!;
       if (caseIndex === 0 || caseIndex === 15) continue;
 
-      const segments =
-        caseToEdgeCodesDense[caseIndex] ??
-        segmentsForAmbiguousCell(x, y, caseIndex, field, threshold);
+      const segments = computeSegments(caseIndex, x, y, field, threshold);
 
       for (const [e0, e1] of segments) {
         const idA = edgeCodeToId(e0, x, y, cellXDim, xDim, horizontalEdgeCount);
@@ -302,36 +351,7 @@ export function buildEdgeSegmentsFromCases(
       };
 }
 
-function interpolateT(a: number, b: number, threshold: number) {
-  if (a === b) return 0.5;
-  return (threshold - a) / (b - a);
-}
-
-function edgeIdToPoint(
-  edgeId: number,
-  horizontalEdgeCount: number,
-  cellXDim: number,
-  xDim: number,
-  field: ScalarField,
-  threshold: number,
-) {
-  if (edgeId < horizontalEdgeCount) {
-    const y = Math.floor(edgeId / cellXDim);
-    const x = edgeId - y * cellXDim;
-    const a = field.get(x, y);
-    const b = field.get(x + 1, y);
-    return [x + interpolateT(a, b, threshold), y] as Point;
-  }
-
-  const localId = edgeId - horizontalEdgeCount;
-  const y = Math.floor(localId / xDim);
-  const x = localId - y * xDim;
-  const a = field.get(x, y);
-  const b = field.get(x, y + 1);
-  return [x, y + interpolateT(a, b, threshold)] as Point;
-}
-
-export function walkEdgeSegmentsIntoPolylines(
+export function generateGeometry(
   edgeA: Uint32Array,
   edgeB: Uint32Array,
   endpointCount: number,
@@ -420,12 +440,12 @@ export function walkEdgeSegmentsIntoPolylines(
   return polylines;
 }
 
-function marchWithField(thresholds: number[], field: ScalarField) {
+function computePolylines(thresholds: number[], field: ScalarField) {
   const allPolylines: Point[][] = [];
 
   for (const threshold of thresholds) {
-    const { caseGrid, cellXDim, cellYDim } = buildCaseGridFromField(field, threshold);
-    const { edgeA, edgeB, endpointCount, horizontalEdgeCount, xDim } = buildEdgeSegmentsFromCases(
+    const { caseGrid, cellXDim, cellYDim } = computeCaseIdentities(field, threshold);
+    const { edgeA, edgeB, endpointCount, horizontalEdgeCount, xDim } = computeTopology(
       caseGrid,
       cellXDim,
       cellYDim,
@@ -433,7 +453,7 @@ function marchWithField(thresholds: number[], field: ScalarField) {
       threshold,
     );
 
-    const polylines = walkEdgeSegmentsIntoPolylines(
+    const polylines = generateGeometry(
       edgeA,
       edgeB,
       endpointCount,
@@ -451,11 +471,11 @@ function marchWithField(thresholds: number[], field: ScalarField) {
 }
 
 // Backward-compatible nested-grid API
-export function marchingSquaresEfficient(thresholds: number[], scalarGrid: number[][]) {
-  return marchWithField(thresholds, fieldFromNestedGrid(scalarGrid));
+export function marchingSquaresScalar(thresholds: number[], scalarGrid: number[][]) {
+  return computePolylines(thresholds, fieldFromNestedGrid(scalarGrid));
 }
 
-export function marchingSquares(
+export function marchingSquaresField(
   thresholds: number[],
   typedArray: Float32Array,
   shape: [number, number],
@@ -470,5 +490,26 @@ export function marchingSquares(
     throw new Error("Only 2D shapes are supported");
   }
 
-  return marchWithField(thresholds, fieldFromRowMajorFloat32(typedArray, xDim, yDim));
+  return computePolylines(thresholds, fieldFromTypedArray(typedArray, xDim, yDim));
 }
+
+function marchingSquares(thresholds: number[], grid: number[][]): Point[][];
+function marchingSquares(
+  thresholds: number[],
+  typedArray: Float32Array,
+  shape: [number, number],
+): Point[][];
+function marchingSquares(
+  thresholds: number[],
+  data: number[][] | Float32Array,
+  shape?: [number, number],
+): Point[][] {
+  if (data instanceof Float32Array) {
+    if (!shape) throw new Error("Shape must be provided when using typed array input");
+    return marchingSquaresField(thresholds, data, shape);
+  } else {
+    return marchingSquaresScalar(thresholds, data);
+  }
+}
+
+export default marchingSquares;
