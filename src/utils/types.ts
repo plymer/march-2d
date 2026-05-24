@@ -7,3 +7,10 @@ export type FieldTopology = {
   y: number;
   segments: SegmentOnCell[];
 };
+
+export type Polylines = { coords: Float64Array; lineOffsets: Uint32Array };
+
+export type PolylinesWithLevels = Polylines & {
+  levelValues: number[];
+  polylineLevelIndex: Uint8Array;
+};

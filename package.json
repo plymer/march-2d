@@ -12,7 +12,7 @@
     "dev:simple": "tsx watch src/simple/index.ts",
     "dev:efficient": "tsx watch src/efficient/index.ts",
     "dev:barnes": "tsx watch src/barnes/index.ts",
-    "bench": "tsx watch src/utils/benchmark.ts"
+    "bench": "tsx src/utils/benchmark.ts"
   },
   "dependencies": {
     "@plymer/fast-barnes-ts": "^0.3.3",
