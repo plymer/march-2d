@@ -13,6 +13,12 @@ type ScalarField = {
   get: (x: number, y: number) => number;
 };
 
+export type PolylinesWithLevels = {
+  polylines: Point[][];
+  levelValues: number[]; // unique thresholds, stored once
+  polylineLevelIndex: Uint8Array;
+};
+
 // Dense LUT for the 16 marching-square cases.
 const caseToSegmentsDense: ReadonlyArray<SegmentOnCell[] | undefined> = [
   undefined,
@@ -442,8 +448,16 @@ export function generateGeometry(
 
 function computePolylines(thresholds: number[], field: ScalarField) {
   const allPolylines: Point[][] = [];
+  const levelIndexBuffer: number[] = [];
 
-  for (const threshold of thresholds) {
+  if (thresholds.length > 255) {
+    throw new Error(
+      `Your threshold count is ${thresholds.length}. This marching squares implementation only supports up to 255 thresholds due to internal use of Uint8Array for level indexing. Please reduce the number of thresholds or implement a custom solution for more levels.`,
+    );
+  }
+
+  for (let levelIdx = 0; levelIdx < thresholds.length; levelIdx++) {
+    const threshold = thresholds[levelIdx]!;
     const { caseGrid, cellXDim, cellYDim } = computeCaseIdentities(field, threshold);
     const { edgeA, edgeB, endpointCount, horizontalEdgeCount, xDim } = computeTopology(
       caseGrid,
@@ -465,12 +479,19 @@ function computePolylines(thresholds: number[], field: ScalarField) {
     );
 
     allPolylines.push(...polylines);
+
+    for (let i = 0; i < polylines.length; i++) {
+      levelIndexBuffer.push(levelIdx);
+    }
   }
 
-  return allPolylines;
+  return {
+    polylines: allPolylines,
+    levelValues: thresholds.slice(),
+    polylineLevelIndex: Uint8Array.from(levelIndexBuffer),
+  };
 }
 
-// Backward-compatible nested-grid API
 export function marchingSquaresScalar(thresholds: number[], scalarGrid: number[][]) {
   return computePolylines(thresholds, fieldFromNestedGrid(scalarGrid));
 }
@@ -493,17 +514,17 @@ export function marchingSquaresField(
   return computePolylines(thresholds, fieldFromTypedArray(typedArray, xDim, yDim));
 }
 
-function marchingSquares(thresholds: number[], grid: number[][]): Point[][];
+function marchingSquares(thresholds: number[], grid: number[][]): PolylinesWithLevels;
 function marchingSquares(
   thresholds: number[],
   typedArray: Float32Array,
   shape: [number, number],
-): Point[][];
+): PolylinesWithLevels;
 function marchingSquares(
   thresholds: number[],
   data: number[][] | Float32Array,
   shape?: [number, number],
-): Point[][] {
+): PolylinesWithLevels {
   if (data instanceof Float32Array) {
     if (!shape) throw new Error("Shape must be provided when using typed array input");
     return marchingSquaresField(thresholds, data, shape);
@@ -512,4 +533,4 @@ function marchingSquares(
   }
 }
 
-export default marchingSquares;
+export { marchingSquares };

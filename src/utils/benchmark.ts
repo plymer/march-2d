@@ -1,8 +1,8 @@
 import { marchingSquaresSimple } from "../simple/helpers.js";
-import { marchingSquaresEfficient } from "../efficient/helpers.js";
+import { marchingSquares, type PolylinesWithLevels } from "../efficient/helpers.js";
 import { fillGrid } from "./mockup.js";
 
-type MarchFn = (thresholds: number[], griddedData: number[][]) => [number, number][][];
+type MarchFn = (thresholds: number[], griddedData: number[][]) => PolylinesWithLevels;
 
 const defaultSizes = [256, 512, 1024];
 const thresholds = [-6, 0, 6];
@@ -57,7 +57,10 @@ function benchmark(name: string, fn: MarchFn, grid: number[][], levels: number[]
     const polylines = fn(levels, grid);
     const t1 = performance.now();
     durations.push(t1 - t0);
-    polylineCount = polylines.length;
+    polylineCount = Object.hasOwn(polylines, "polylines")
+      ? polylines.polylines.length
+      : // @ts-expect-error -- accommodate both return types from simple and efficient implementations
+        polylines.length;
   }
 
   forceGC();
@@ -70,23 +73,24 @@ function benchmark(name: string, fn: MarchFn, grid: number[][], levels: number[]
   console.log(
     `${name} timing ms: min=${Math.min(...durations).toFixed(3)} median=${median(durations).toFixed(3)} p95=${percentile(durations, 95).toFixed(3)} avg=${avgMs.toFixed(3)}`,
   );
-  // console.log(
-  //   `${name} memory MiB: heapUsed_before=${bytesToMiB(memBefore.heapUsed).toFixed(2)} heapUsed_after=${bytesToMiB(memAfter.heapUsed).toFixed(2)} rss_before=${bytesToMiB(memBefore.rss).toFixed(2)} rss_after=${bytesToMiB(memAfter.rss).toFixed(2)}`,
-  // );
+  console.log(
+    `${name} memory MiB: heapUsed_before=${bytesToMiB(memBefore.heapUsed).toFixed(2)} heapUsed_after=${bytesToMiB(memAfter.heapUsed).toFixed(2)} rss_before=${bytesToMiB(memBefore.rss).toFixed(2)} rss_after=${bytesToMiB(memAfter.rss).toFixed(2)}`,
+  );
 }
 
 console.log("Benchmark configuration");
 console.log(
   `sizes=${sizes.join(",")}, thresholds=${thresholds.join(",")}, warmups=${warmups}, repeats=${repeats}`,
 );
-// console.log("Use NODE_OPTIONS=--expose-gc to enable explicit GC between benchmark phases.");
+console.log("Use NODE_OPTIONS=--expose-gc to enable explicit GC between benchmark phases.");
 console.log("");
 
 for (const size of sizes) {
   const griddedData = fillGrid(size, size);
 
   console.log(`Grid ${size}x${size}`);
-  benchmark("efficient", marchingSquaresEfficient, griddedData, thresholds);
+  benchmark("efficient", marchingSquares, griddedData, thresholds);
+  // @ts-expect-error -- accommodate both return types from simple and efficient implementations
   benchmark("simple", marchingSquaresSimple, griddedData, thresholds);
   console.log("");
 }

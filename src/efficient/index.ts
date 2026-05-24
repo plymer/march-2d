@@ -9,6 +9,9 @@ const thresholds = [-6, 0, 6];
 
 const typedArrayGriddedData = fillGridTypedArray(initXDim, initYDim);
 
-const isolines = marchingSquaresField(thresholds, typedArrayGriddedData, [initXDim, initYDim]);
+const { polylines: isolines } = marchingSquaresField(thresholds, typedArrayGriddedData, [
+  initXDim,
+  initYDim,
+]);
 
 renderAsciiPolylines(isolines, initXDim, initYDim, 2);
