@@ -2,7 +2,7 @@
 
 import { marchingSquares } from "../efficient/helpers.js";
 import { barnes, getBarnesParams } from "@plymer/fast-barnes-ts";
-import { readInputFromCsv } from "./helpers.js";
+import { readInputFromCsv, writeToGeoJson } from "./helpers.js";
 
 async function main() {
   const pointTupleArray = await readInputFromCsv();
@@ -29,9 +29,7 @@ async function main() {
     `Computed ${polylines.polylines.length} polylines for the following thresholds: ${polylines.levelValues.join(", ")}`,
   );
 
-  if (polylines.polylines.length > 0) {
-    console.log(`Example polyline (first threshold):`, polylines.polylines[0]);
-  }
+  await writeToGeoJson(polylines, params.x0, params.step);
 }
 
 await main();
