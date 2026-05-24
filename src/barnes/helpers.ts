@@ -50,3 +50,8 @@ export async function writeToGeoJson(polylines: PolylinesWithLevels, x0: Point, 
   const outputPath = path.resolve(".", "src", "barnes", "output.geojson");
   return await fs.writeFile(outputPath, JSON.stringify(geoJson, null, 2), "utf-8");
 }
+
+export async function writeTupleGeoJSON(input: unknown) {
+  const ouputPath = path.resolve(".", "src", "barnes", "tuple_output.geojson");
+  return await fs.writeFile(ouputPath, JSON.stringify(input, null, 2), "utf-8");
+}
