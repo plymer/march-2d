@@ -96,6 +96,7 @@ function validateGrid(grid: number[][]) {
 }
 
 const isAboveThreshold = (value: number, threshold: number) => value > threshold + thresholdEpsilon;
+const isFiniteNumber = (value: number) => Number.isFinite(value);
 
 function interpolateT(a: number, b: number, threshold: number) {
   if (a === b) return 0.5;
@@ -224,10 +225,26 @@ export function computeCaseIdentities(field: ScalarField, threshold: number) {
 
   for (let y = 0; y < cellYDim; y++) {
     for (let x = 0; x < cellXDim; x++) {
-      const topLeft = isAboveThreshold(field.get(x, y), threshold) ? 1 : 0;
-      const topRight = isAboveThreshold(field.get(x + 1, y), threshold) ? 1 : 0;
-      const bottomRight = isAboveThreshold(field.get(x + 1, y + 1), threshold) ? 1 : 0;
-      const bottomLeft = isAboveThreshold(field.get(x, y + 1), threshold) ? 1 : 0;
+      const topLeftValue = field.get(x, y);
+      const topRightValue = field.get(x + 1, y);
+      const bottomRightValue = field.get(x + 1, y + 1);
+      const bottomLeftValue = field.get(x, y + 1);
+
+      // Treat invalid/no-data corners as outside the contour domain for this cell.
+      if (
+        !isFiniteNumber(topLeftValue) ||
+        !isFiniteNumber(topRightValue) ||
+        !isFiniteNumber(bottomRightValue) ||
+        !isFiniteNumber(bottomLeftValue)
+      ) {
+        caseGrid[y * cellXDim + x] = 0;
+        continue;
+      }
+
+      const topLeft = isAboveThreshold(topLeftValue, threshold) ? 1 : 0;
+      const topRight = isAboveThreshold(topRightValue, threshold) ? 1 : 0;
+      const bottomRight = isAboveThreshold(bottomRightValue, threshold) ? 1 : 0;
+      const bottomLeft = isAboveThreshold(bottomLeftValue, threshold) ? 1 : 0;
 
       caseGrid[y * cellXDim + x] =
         (topLeft << 3) | (topRight << 2) | (bottomRight << 1) | bottomLeft;
