@@ -15,11 +15,17 @@ if (!params) {
   throw new Error("Failed to compute Barnes parameters");
 }
 
+const startBarnes = performance.now();
+
 const { data, shape } = barnes(pointTupleArray, 1.5, params.x0, params.step, params.size, {
   maxDist: 3.717,
   numIter: 18,
   method: "optimized_convolution",
 });
+
+const endBarnes = performance.now();
+
+console.log(`Barnes interpolation took ${(endBarnes - startBarnes).toFixed(2)} ms`);
 
 if (shape.length !== 2) {
   throw new Error(`Expected shape to be a tuple of length 2, got ${shape.length}`);
@@ -29,10 +35,21 @@ if (shape.length !== 2) {
 
 const thresholds = Array.from({ length: 21 }).map((_, i) => -50 + i * 5);
 
+const startPoly = performance.now();
+
 const polylines = marchingSquares(thresholds, data, shape as [number, number]);
+
+const endPoly = performance.now();
+
+console.log(`Marching squares took ${(endPoly - startPoly).toFixed(2)} ms`);
 
 console.log(
   `Computed ${polylines.polylines.length} polylines for the following thresholds: ${polylines.levelValues.join(", ")}`,
 );
 
+const geoJsonWriteStart = performance.now();
 await writeToGeoJson(polylines, params.x0, params.step);
+
+const geoJsonWriteEnd = performance.now();
+
+console.log(`Writing to GeoJSON took ${(geoJsonWriteEnd - geoJsonWriteStart).toFixed(2)} ms`);
