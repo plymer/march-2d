@@ -1,5 +1,4 @@
-import { resolveAmbiguousCase } from "../utils/utils.js";
-import type { Point, SegmentOnCell } from "../utils/types.js";
+import type { Point, PolylinesWithLevels, SegmentOnCell } from "../utils/types.js";
 
 const thresholdEpsilon = 1e-9;
 
@@ -13,33 +12,7 @@ type ScalarField = {
   get: (x: number, y: number) => number;
 };
 
-export type PolylinesWithLevels = {
-  polylines: Point[][];
-  levelValues: number[]; // unique thresholds, stored once
-  polylineLevelIndex: Uint8Array;
-};
-
-// Dense LUT for the 16 marching-square cases.
-const caseToSegmentsDense: ReadonlyArray<SegmentOnCell[] | undefined> = [
-  undefined,
-  [["left", "bottom"]],
-  [["bottom", "right"]],
-  [["left", "right"]],
-  [["top", "right"]],
-  undefined,
-  [["top", "bottom"]],
-  [["left", "top"]],
-  [["top", "left"]],
-  [["top", "bottom"]],
-  undefined,
-  [["top", "right"]],
-  [["left", "right"]],
-  [["bottom", "right"]],
-  [["left", "bottom"]],
-  undefined,
-] as const;
-
-const caseToEdgeCodesDense: ReadonlyArray<EdgeCodeSegments | undefined> = [
+const edgeCodes: ReadonlyArray<EdgeCodeSegments | undefined> = [
   undefined,
   [[3, 2]],
   [[2, 1]],
@@ -77,23 +50,6 @@ const ambiguousCase10Below: EdgeCodeSegments = [
   [0, 3],
   [2, 1],
 ] as const;
-
-function validateGrid(grid: number[][]) {
-  const yDim = grid.length;
-  const xDim = grid[0]?.length;
-
-  if (xDim === undefined || xDim === 0 || yDim === 0) {
-    throw new Error("Grid input is invalid");
-  }
-
-  for (let y = 0; y < yDim; y++) {
-    if (grid[y]?.length !== xDim) {
-      throw new Error("Grid rows are not rectangular");
-    }
-  }
-
-  return { xDim, yDim };
-}
 
 const isAboveThreshold = (value: number, threshold: number) => value > threshold + thresholdEpsilon;
 const isFiniteNumber = (value: number) => Number.isFinite(value);
@@ -214,10 +170,10 @@ function computeSegments(
   const isAmbiguous = caseIndex === 5 || caseIndex === 10;
   return isAmbiguous
     ? resolveSaddle(x, y, caseIndex as 5 | 10, field, threshold)
-    : caseToEdgeCodesDense[caseIndex]!;
+    : edgeCodes[caseIndex]!;
 }
 
-export function computeCaseIdentities(field: ScalarField, threshold: number) {
+function computeCaseIdentities(field: ScalarField, threshold: number) {
   const { xDim, yDim } = field;
   const cellXDim = xDim - 1;
   const cellYDim = yDim - 1;
@@ -254,68 +210,7 @@ export function computeCaseIdentities(field: ScalarField, threshold: number) {
   return { caseGrid, cellXDim, cellYDim, xDim, yDim };
 }
 
-/**
- * Build a compact case-grid in one pass from scalar data.
- * Output is row-major with dimensions (xDim - 1) * (yDim - 1).
- */
-export function buildCaseGrid(grid: number[][], threshold: number) {
-  const { xDim, yDim } = validateGrid(grid);
-  const cellXDim = xDim - 1;
-  const cellYDim = yDim - 1;
-
-  // allocate the case grid as a typed array for efficiency; each cell is a 4-bit index into the marching squares LUT
-  // Uint8Array is the smallest available unsigned integer type, so we use that and just ignore the upper 4 bits of each byte
-  // we could use something smaller but we would have to manually manage the process so we use this for convenience
-  const caseGrid = new Uint8Array(cellXDim * cellYDim);
-
-  for (let y = 0; y < cellYDim; y++) {
-    const rowTop = grid[y]!;
-    const rowBottom = grid[y + 1]!;
-
-    for (let x = 0; x < cellXDim; x++) {
-      const topLeft = isAboveThreshold(rowTop[x]!, threshold) ? 1 : 0;
-      const topRight = isAboveThreshold(rowTop[x + 1]!, threshold) ? 1 : 0;
-      const bottomRight = isAboveThreshold(rowBottom[x + 1]!, threshold) ? 1 : 0;
-      const bottomLeft = isAboveThreshold(rowBottom[x]!, threshold) ? 1 : 0;
-
-      const caseIndex = (topLeft << 3) | (topRight << 2) | (bottomRight << 1) | bottomLeft;
-      caseGrid[y * cellXDim + x] = caseIndex; // row-major storage; our cell's index is y times the width (stride) of the grid, plus the current column
-    }
-  }
-
-  return { caseGrid, cellXDim, cellYDim, xDim, yDim };
-}
-
-export function computeTopologyFromCases(
-  caseGrid: Uint8Array,
-  cellXDim: number,
-  cellYDim: number,
-  scalarGrid: number[][],
-  threshold: number,
-) {
-  const topology: { x: number; y: number; segments: SegmentOnCell[] }[] = [];
-
-  for (let y = 0; y < cellYDim; y++) {
-    for (let x = 0; x < cellXDim; x++) {
-      const caseIndex = caseGrid[y * cellXDim + x]!;
-
-      if (caseIndex === 0 || caseIndex === 15) continue;
-
-      let segments = caseToSegmentsDense[caseIndex];
-
-      if (!segments) {
-        segments = resolveAmbiguousCase(x, y, caseIndex, scalarGrid, threshold);
-      }
-      if (!segments) continue;
-
-      topology.push({ x, y, segments });
-    }
-  }
-
-  return topology;
-}
-
-export function computeTopology(
+function computeTopology(
   caseGrid: Uint8Array,
   cellXDim: number,
   cellYDim: number,
@@ -374,7 +269,7 @@ export function computeTopology(
       };
 }
 
-export function generateGeometry(
+function generateGeometry(
   edgeA: Uint32Array,
   edgeB: Uint32Array,
   endpointCount: number,
@@ -509,28 +404,6 @@ function computePolylines(thresholds: number[], field: ScalarField) {
   };
 }
 
-export function marchingSquaresScalar(thresholds: number[], scalarGrid: number[][]) {
-  return computePolylines(thresholds, fieldFromNestedGrid(scalarGrid));
-}
-
-export function marchingSquaresField(
-  thresholds: number[],
-  typedArray: Float32Array,
-  shape: [number, number],
-) {
-  const [xDim, yDim] = shape;
-
-  if (typedArray.length !== xDim * yDim) {
-    throw new Error("Typed array length does not match provided shape");
-  }
-
-  if (shape.length !== 2) {
-    throw new Error("Only 2D shapes are supported");
-  }
-
-  return computePolylines(thresholds, fieldFromTypedArray(typedArray, xDim, yDim));
-}
-
 function marchingSquares(thresholds: number[], grid: number[][]): PolylinesWithLevels;
 function marchingSquares(
   thresholds: number[],
@@ -543,10 +416,23 @@ function marchingSquares(
   shape?: [number, number],
 ): PolylinesWithLevels {
   if (data instanceof Float32Array) {
-    if (!shape) throw new Error("Shape must be provided when using typed array input");
-    return marchingSquaresField(thresholds, data, shape);
+    if (!shape) {
+      throw new Error("Shape must be provided when using typed array input");
+    } else {
+      const [xDim, yDim] = shape;
+
+      if (data.length !== xDim * yDim) {
+        throw new Error("Typed array length does not match provided shape");
+      }
+
+      if (shape.length !== 2) {
+        throw new Error("Only 2D shapes are supported");
+      }
+
+      return computePolylines(thresholds, fieldFromTypedArray(data, xDim, yDim));
+    }
   } else {
-    return marchingSquaresScalar(thresholds, data);
+    return computePolylines(thresholds, fieldFromNestedGrid(data));
   }
 }
 

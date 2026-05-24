@@ -8,9 +8,8 @@ export type FieldTopology = {
   segments: SegmentOnCell[];
 };
 
-export type Polylines = { coords: Float64Array; lineOffsets: Uint32Array };
-
-export type PolylinesWithLevels = Polylines & {
-  levelValues: number[];
+export type PolylinesWithLevels = {
+  polylines: Point[][];
+  levelValues: number[]; // unique thresholds, stored once
   polylineLevelIndex: Uint8Array;
 };

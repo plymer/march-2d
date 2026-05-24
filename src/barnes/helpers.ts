@@ -1,8 +1,8 @@
 import type { Tuple2DWithValue } from "@plymer/fast-barnes-ts";
 import fs from "fs/promises";
 import path from "path";
-import type { PolylinesWithLevels } from "../efficient/helpers.js";
-import type { Point } from "../utils/types.js";
+
+import type { Point, PolylinesWithLevels } from "../utils/types.js";
 
 function convertToGeographicCoordinates(lines: Point[], x0: Point, step: number[]): Point[] {
   return lines.map((point) => [x0[0] + point[0] * step[0]!, x0[1] + point[1] * step[1]!]);
