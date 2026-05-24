@@ -11,6 +11,9 @@ importers:
       '@plymer/fast-barnes-ts':
         specifier: ^0.3.3
         version: 0.3.3(@types/geojson@7946.0.16)
+      d3-contour:
+        specifier: ^4.0.2
+        version: 4.0.2
     devDependencies:
       '@types/node':
         specifier: ^25.9.0

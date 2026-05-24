@@ -15,7 +15,8 @@
     "bench": "tsx --watch src/utils/benchmark.ts"
   },
   "dependencies": {
-    "@plymer/fast-barnes-ts": "^0.3.3"
+    "@plymer/fast-barnes-ts": "^0.3.3",
+    "d3-contour": "^4.0.2"
   },
   "devDependencies": {
     "@types/node": "^25.9.0",
