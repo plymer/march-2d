@@ -21,6 +21,10 @@ const { data, shape } = barnes(pointTupleArray, 1.5, params.x0, params.step, par
   method: "optimized_convolution",
 });
 
+if (shape.length !== 2) {
+  throw new Error(`Expected shape to be a tuple of length 2, got ${shape.length}`);
+}
+
 // const thresholds = Array.from({ length: 26 }).map((_, i) => 960 + i * 4);
 
 const thresholds = Array.from({ length: 21 }).map((_, i) => -50 + i * 5);
